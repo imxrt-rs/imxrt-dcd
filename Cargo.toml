@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "imxrt-dcd",
+#    "imxrt-dcd-static",
+]

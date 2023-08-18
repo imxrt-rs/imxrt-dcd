@@ -1,0 +1,14 @@
+[package]
+name = "imxrt-dcd"
+version = "0.1.0"
+edition = "2021"
+
+authors = ["summivox <summivox@gmail.com>"]
+description = "Device Configuration Data (DCD) generator for i.MX RT1060 series firmware images"
+repository = "https://github.com/summivox/imxrt-dcd"
+categories = ["embedded", "hardware-support"]
+keywords = ["arm", "cortex-m", "imxrt", "nxp"]
+license = "MIT"
+
+[dependencies]
+itertools = "0.10"
