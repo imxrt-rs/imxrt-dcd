@@ -3,13 +3,13 @@
 [![Crates.io](https://img.shields.io/crates/v/imxrt-dcd)](https://crates.io/crates/imxrt-dcd)
 [![docs.rs](https://img.shields.io/docsrs/imxrt-dcd)](https://docs.rs/imxrt-dcd)
 
-The i.MX RT1050/1060 series of MCUs feature a ROM bootloader. As a part of the boot process, it reads a section in the firmware image to perform simple initialization of peripheral registers, e.g. to set up external memory controllers. This section is the Device Configuration Data (DCD). 
+The i.MX RT1050/1060 series of MCUs feature a ROM bootloader. As a part of the boot process, it interprets the Device Configuration Data (DCD) section in the firmware image to perform limited initialization and validation of peripheral registers, e.g. to set up external memory controllers, before any ARM instructions from the firmware image is run.
 
-This crate allows you to generate a DCD binary (byte array) from its semantic description. This is useful e.g. in a `build.rs` script to generate a static variable to be linked to the firmware image.
+This crate allows you to generate a DCD binary (byte array) from its semantic description. This is useful e.g. in a `build.rs` script to generate a static variable to be linked to the firmware image. (Shameless plug: See [static-include-bytes](https://crates.io/crates/static-include-bytes).)
 
-# What does DCD do?
+# What does the DCD do exactly?
 
-Reference: i.MX RT1060 Reference Manual, §9.7.2 .
+Reference: i.MX RT1060 Reference Manual (rev. 3), §9.7.2 .
 
 The DCD section in the firmware image is a serialized byte array of one or more commands:
 
@@ -26,9 +26,41 @@ The DCD section in the firmware image is a serialized byte array of one or more 
 
 - **NOP**: Ignored (might act as a delay?)
 
-Multiple write commands with the same bit width and operation (i.e. write/clear/set) can be merged (sharing the same command header) to save some bytes. This might be helpful as there is a hardcoded byte length limit in the ROM (1768 bytes for RT1060, including headers). This crate automatically performs this compression but does not enforce any byte size limit.
+## Write command compression
 
-# Usage
+Multiple Write commands with the same bit width and operation (i.e. write/clear/set) can be merged (sharing the same command header) to save some bytes. This might be helpful as there is a hardcoded byte length limit in the ROM (1768 bytes for RT1060, including headers).
+
+This crate automatically performs this compression but does _not_ enforce any byte size limit.
+
+## Valid Write command address ranges
+
+The ROM only allows Write commands to a limited number of address ranges:
+
+| Begin       | End (inclusive) | Description            |
+|-------------|-----------------|------------------------|
+| 0x400A_4000 | 0x400A_7FFF     | IOMUX Control SNVS GPR |
+| 0x400A_8000 | 0x400A_BFFF     | IOMUX Control SNVS     |
+| 0x400A_C000 | 0x400A_FFFF     | IOMUX Control GPR      |
+| 0x401F_8000 | 0x401F_BFFF     | IOMUX Control          |
+| 0x400D_8000 | 0x400D_BFFF     | CCM Analog             |
+| 0x400F_C000 | 0x400F_FFFF     | CCM                    |
+| 0x402F_0000 | 0x402F_3FFF     | SEMC                   |
+
+Writing to anywhere outside these ranges will cause the ROM to **immediately abandon interpreting the rest of your DCD**.
+
+Again, this crate does _not_ enforce any address range limitations.
+
+## Check command polling count 
+
+The Check command may specify one of the following:
+
+- Omitted max polling count: ROM will poll indefinitely as long as the condition remains unsatisfied.
+- max polling count == 0: Equivalent to NOP.
+- max polling count > 0: If the max polling count is hit, the ROM will **immediately abandon interpreting the rest of your DCD**.
+
+Note that the ROM does _not_ seem to limit the address range of Check commands.
+
+# Toy Example
 
 ```rust
 use imxrt_dcd::*;

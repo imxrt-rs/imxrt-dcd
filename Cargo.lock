@@ -10,14 +10,14 @@ checksum = "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
 
 [[package]]
 name = "imxrt-dcd"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "itertools",
 ]
 
 [[package]]
 name = "imxrt-dcd-build-example"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "imxrt-dcd",
  "static-include-bytes",

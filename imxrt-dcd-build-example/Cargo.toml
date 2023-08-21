@@ -1,6 +1,6 @@
 [package]
 name = "imxrt-dcd-build-example"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 
 
@@ -9,9 +9,9 @@ edition = "2021"
 static-include-bytes = "1.0.0"
 
 # internal
-imxrt-dcd = { path = "../imxrt-dcd", version = "0.1.0" }
+imxrt-dcd = { path = "../imxrt-dcd", version = "1.0.0" }
 
 [build-dependencies]
 
 # internal
-imxrt-dcd = { path = "../imxrt-dcd", version = "0.1.0" }
+imxrt-dcd = { path = "../imxrt-dcd", version = "1.0.0" }
