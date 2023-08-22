@@ -4,33 +4,41 @@ use itertools::Itertools;
 /// A DCD command.
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub enum Command {
+    /// Dummy command --- may behave as a small delay.
     #[default]
     Nop,
     Write(Write),
     Check(Check),
 }
 
-/// Command for writing a value to an address.
+/// DCD command for writing a value to an address.
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct Write {
     /// Width of the bus write.
     pub width: Width,
     /// Writing operation --- see [`WriteOp`].
     pub op: WriteOp,
+    /// Address to be written to. Note that the ROM may enforce valid address ranges.
     pub address: u32,
     pub value: u32,
 }
 
-/// Command for polling an address until the value matches a given bitmask condition.
+/// DCD command for polling an address until the value matches a given bitmask condition.
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct Check {
     /// Width of the bus read.
     pub width: Width,
     /// Condition to check --- see [`CheckCond`].
     pub cond: CheckCond,
+    /// Address to read from. Unlike [`Write::address`], any address is valid.
     pub address: u32,
+    /// Bitmask to check the value against --- see [`CheckCond`].
     pub mask: u32,
-    /// If `None`, poll indefinitely; otherwise poll at most this many times.
+    /// Optional poll count:
+    /// - `None` => poll indefinitely
+    /// - `Some(0)` => equivalent to [`Command::Nop`]
+    /// - `Some(x) if x > 0` => poll at most `x` times; if the condition still is not satisfied,
+    ///   the boot ROM will abandon interpreting the rest of the DCD.
     pub count: Option<u32>,
 }
 
@@ -145,6 +153,8 @@ fn group_key(index: usize, command: &Command) -> (usize, Width, WriteOp) {
 
 /// Serializes given commands as a complete DCD block into a byte stream.
 /// Consecutive write commands with the same width and op are automatically combined.
+///
+/// While the ROM may enforce tighter byte size limits, this
 ///
 /// Returns the number of bytes written or error.
 ///

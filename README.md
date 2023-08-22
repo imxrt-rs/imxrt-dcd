@@ -24,41 +24,51 @@ The DCD section in the firmware image is a serialized byte array of one or more 
   - `(*address & mask) != mask` --- any clear
   - `(*address & mask) != 0` --- any set
 
-- **NOP**: Ignored (might act as a delay?)
+- **NOP**: Ignored --- may behave as a small delay.
+
+## DCD size limit
+
+The DCD serialization format is 4-byte aligned with a 2-byte length field in its header. This allows at most 65532 bytes (all headers included).
+However, the boot ROM of a specific chip family may enforce a (much) shorter length limit. For RT1060 this is 1768 bytes.
+
+This crate only enforces the 64 KiB length limit, but does return the size of the serialized DCD so that the user may add a tighter check.
 
 ## Write command compression
 
-Multiple Write commands with the same bit width and operation (i.e. write/clear/set) can be merged (sharing the same command header) to save some bytes. This might be helpful as there is a hardcoded byte length limit in the ROM (1768 bytes for RT1060, including headers).
+Multiple consecutive Write commands with the same bit width and operation (i.e. write/clear/set) can be merged (sharing the same command header) to save 4 bytes per extra command.
 
-This crate automatically performs this compression but does _not_ enforce any byte size limit.
+This crate automatically performs this compression during serialization. This may help meet the DCD size limit.
 
 ## Valid Write command address ranges
 
-The ROM only allows Write commands to a limited number of address ranges:
+The boot ROM of a specific chip family may only allow Write commands to a limited number of address ranges.
 
-| Begin       | End (inclusive) | Description            |
-|-------------|-----------------|------------------------|
-| 0x400A_4000 | 0x400A_7FFF     | IOMUX Control SNVS GPR |
-| 0x400A_8000 | 0x400A_BFFF     | IOMUX Control SNVS     |
-| 0x400A_C000 | 0x400A_FFFF     | IOMUX Control GPR      |
-| 0x401F_8000 | 0x401F_BFFF     | IOMUX Control          |
-| 0x400D_8000 | 0x400D_BFFF     | CCM Analog             |
-| 0x400F_C000 | 0x400F_FFFF     | CCM                    |
-| 0x402F_0000 | 0x402F_3FFF     | SEMC                   |
+For example, the following are the valid address ranges for RT1060:
 
-Writing to anywhere outside these ranges will cause the ROM to **immediately abandon interpreting the rest of your DCD**.
+| Begin         | End (inclusive) | Description            |
+|---------------|-----------------|------------------------|
+| `0x400A_4000` | `0x400A_7FFF`   | IOMUX Control SNVS GPR |
+| `0x400A_8000` | `0x400A_BFFF`   | IOMUX Control SNVS     |
+| `0x400A_C000` | `0x400A_FFFF`   | IOMUX Control GPR      |
+| `0x401F_8000` | `0x401F_BFFF`   | IOMUX Control          |
+| `0x400D_8000` | `0x400D_BFFF`   | CCM Analog             |
+| `0x400F_C000` | `0x400F_FFFF`   | CCM                    |
+| `0x402F_0000` | `0x402F_3FFF`   | SEMC                   |
 
-Again, this crate does _not_ enforce any address range limitations.
+Writing to anywhere outside these ranges will cause the boot ROM to **immediately abandon interpreting the rest of your DCD**.
+
+This crate does _not_ enforce any address range limitations. The user is expected to provide valid write addresses.
 
 ## Check command polling count 
 
 The Check command may specify one of the following:
 
 - Omitted max polling count: ROM will poll indefinitely as long as the condition remains unsatisfied.
-- max polling count == 0: Equivalent to NOP.
-- max polling count > 0: If the max polling count is hit, the ROM will **immediately abandon interpreting the rest of your DCD**.
+- max polling count == 0: Does not poll at all --- equivalent to NOP.
+- max polling count > 0: If the max polling count is hit, the boot ROM will **immediately abandon interpreting the rest of your DCD**.
 
-Note that the ROM does _not_ seem to limit the address range of Check commands.
+Note that (through my limited experimentation) the boot ROM does _not_ seem to limit the address range of Check commands.
+
 
 # Toy Example
 
@@ -91,8 +101,7 @@ let byte_len = serialize(
             count: None,
         }),
     ],
-)
-.expect("IO failure");
+).unwrap();
 assert_eq!(byte_len, 48);
 assert_eq!(
     &buf.get_ref()[0..48],

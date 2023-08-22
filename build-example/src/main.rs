@@ -1,6 +1,6 @@
 use static_include_bytes::static_include_bytes;
 
-static_include_bytes!(DCD, concat!(env!("OUT_DIR"), "/dcd.bin"));
+static_include_bytes!(DCD = concat!(env!("OUT_DIR"), "/dcd.bin"));
 
 fn main() {
     println!("{}", DCD.len());

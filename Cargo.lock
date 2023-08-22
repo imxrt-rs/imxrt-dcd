@@ -10,14 +10,14 @@ checksum = "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
 
 [[package]]
 name = "imxrt-dcd"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "itertools",
 ]
 
 [[package]]
 name = "imxrt-dcd-build-example"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "imxrt-dcd",
  "static-include-bytes",
@@ -34,6 +34,6 @@ dependencies = [
 
 [[package]]
 name = "static-include-bytes"
-version = "1.0.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "907ada2ad95042db1ea034c6a289f343de467a436a91df7b2c29c44eaa514297"
+checksum = "110de7416712cc4aa5d5be913b9480fc9882911f93a73e6493726877b4b387d0"
