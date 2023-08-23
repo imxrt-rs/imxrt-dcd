@@ -5,13 +5,9 @@ edition = "2021"
 
 
 [dependencies]
-
 static-include-bytes = "2.0"
-
-# internal
 imxrt-dcd.workspace = true
 
 [build-dependencies]
-
-# internal
 imxrt-dcd.workspace = true
+imxrt-ral.workspace = true

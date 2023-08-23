@@ -1,3 +1,5 @@
+// ImHex <https://imhex.werwolv.net/> Pattern Definition for parsing DCD binary.
+
 #pragma endian big
 #pragma eval_depth 100
 

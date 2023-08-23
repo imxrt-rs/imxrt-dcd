@@ -1,13 +1,18 @@
 #![doc = include_str!("../README.md")]
 use itertools::Itertools;
 
+#[cfg(feature = "ral")]
+mod macros;
+
 /// A DCD command.
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub enum Command {
     /// Dummy command --- may behave as a small delay.
     #[default]
     Nop,
+    /// DCD command for writing a value to an address; [`Write`].
     Write(Write),
+    /// DCD command for polling an address until the value matches a given bitmask condition; [`Check`].
     Check(Check),
 }
 
