@@ -3,7 +3,7 @@
 //! Note that these macros do not depend on [`imxrt-ral`][ral] directly, but are expected to work
 //! with the implicit structure of the RAL.
 //!
-//! All macros here share the same syntax, which is an extension of e.g. [`imxrt_ral::write_reg`]:
+//! All macros here share the same syntax, which is an extension of e.g. `imxrt_ral::write_reg`:
 //! ```ignore
 //! macro!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 //! ```
@@ -41,6 +41,13 @@
 //!
 //! [ral]: https://crates.io/crates/imxrt-ral/
 //! [DCD commands]: crate::Command
+//! [`write_reg`]: crate::write_reg
+//! [`set_reg`]: crate::set_reg
+//! [`clear_reg`]: crate::clear_reg
+//! [`check_all_clear`]: crate::check_all_clear
+//! [`check_any_clear`]: crate::check_any_clear
+//! [`check_all_set`]: crate::check_all_set
+//! [`check_any_set`]: crate::check_any_set
 
 
 /// Creates a DCD command that (over-)writes to the specified RAL register,

@@ -2,7 +2,7 @@
 use itertools::Itertools;
 
 #[cfg(feature = "ral")]
-mod macros;
+pub mod macros;
 
 /// A DCD command.
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
