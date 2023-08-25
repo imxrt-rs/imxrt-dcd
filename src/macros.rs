@@ -1,54 +1,8 @@
-//! Macros for conveniently creating [DCD commands][] with [`imxrt-ral`][ral] definitions.
+//! Macros for conveniently creating [DCD commands][cmd] with [`imxrt-ral`][ral] definitions.
+//! See [crate-level documentation](crate).
 //!
-//! Note that these macros do not depend on [`imxrt-ral`][ral] directly, but are expected to work
-//! with the implicit structure of the RAL.
-//!
-//! All macros here share the same syntax, which is an extension of e.g. `imxrt_ral::write_reg`:
-//! ```ignore
-//! macro!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
-//! ```
-//!
-//! Where:
-//!
-//! - `macro` can be:
-//!   - Write: [`write_reg`] / [`set_reg`] / [`clear_reg`]
-//!   - Check: [`check_all_clear`] / [`check_any_clear`] / [`check_all_set`] / [`check_any_set`]
-//!
-//! - each `arg` can be:
-//!   - `field: value` => `(value << field::offset) & field::mask`
-//!   - `@field` => `field::mask` (reads as "all (bits of) `field`")
-//!   - arbitrary expression => itself
-//!
-//! All args are then bitwise-OR'd together as the final value / mask of the command.
-//!
-//! # Example
-//!
-//! ```
-//! use imxrt_dcd as dcd;
-//! use imxrt_ral as ral;  // feature = "imxrt1062"
-//!
-//! assert_eq!(
-//!     dcd::write_reg!(
-//!         ral::ccm_analog, CCM_ANALOG, PLL_ARM, @BYPASS, BYPASS_CLK_SRC: CLK1),
-//!     dcd::Command::Write(dcd::Write {
-//!         width: dcd::Width::B4,
-//!         op: dcd::WriteOp::Write,
-//!         address: 0x400D_8000,
-//!         value: 0x0001_4000,
-//!     }),
-//! );
-//! ```
-//!
+//! [cmd]: crate::Command
 //! [ral]: https://crates.io/crates/imxrt-ral/
-//! [DCD commands]: crate::Command
-//! [`write_reg`]: crate::write_reg
-//! [`set_reg`]: crate::set_reg
-//! [`clear_reg`]: crate::clear_reg
-//! [`check_all_clear`]: crate::check_all_clear
-//! [`check_any_clear`]: crate::check_any_clear
-//! [`check_all_set`]: crate::check_all_set
-//! [`check_any_set`]: crate::check_any_set
-
 
 /// Creates a DCD command that (over-)writes to the specified RAL register,
 /// i.e. `register = arg1 | arg2 | ...` .
@@ -57,7 +11,9 @@
 /// ```ignore
 /// write_reg!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 /// ```
-/// See [macro overview](self) for details on `args`.
+/// Each `arg` can be `field: value`, `@field` (= all bits of the field), or an arbitrary expression.
+/// All args are bitwise-OR'd together to form the final value.
+/// See [crate-level docs](crate) for details on `args`.
 ///
 /// Returns a [`crate::Command::Write`] with [`crate::WriteOp::Write`].
 ///
@@ -147,7 +103,9 @@ macro_rules! write_reg {
 /// ```ignore
 /// write_reg!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 /// ```
-/// See [macro overview](self) for details on `args`.
+/// Each `arg` can be `field: value`, `@field` (= all bits of the field), or an arbitrary expression.
+/// All args are bitwise-OR'd together to form the final value.
+/// See [crate-level docs](crate) for details on `args`.
 ///
 /// Returns a [`crate::Command::Write`] with [`crate::WriteOp::Set`].
 ///
@@ -177,7 +135,9 @@ macro_rules! set_reg {
 /// ```ignore
 /// write_reg!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 /// ```
-/// See [macro overview](self) for details on `args`.
+/// Each `arg` can be `field: value`, `@field` (= all bits of the field), or an arbitrary expression.
+/// All args are bitwise-OR'd together to form the final value.
+/// See [crate-level docs](crate) for details on `args`.
 ///
 /// Returns a [`crate::Command::Write`] with [`crate::WriteOp::Clear`].
 ///
@@ -207,7 +167,9 @@ macro_rules! clear_reg {
 /// ```ignore
 /// check_all_clear!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 /// ```
-/// See [macro overview](self) for details on `args`.
+/// Each `arg` can be `field: value`, `@field` (= all bits of the field), or an arbitrary expression.
+/// All args are bitwise-OR'd together to form the final check mask.
+/// See [crate-level docs](crate) for details on `args`.
 ///
 /// Returns a [`crate::Command::Check`] with [`crate::CheckCond::AllClear`].
 ///
@@ -262,7 +224,9 @@ macro_rules! check_all_clear {
 /// ```ignore
 /// check_any_clear!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 /// ```
-/// See [macro overview](self) for details on `args`.
+/// Each `arg` can be `field: value`, `@field` (= all bits of the field), or an arbitrary expression.
+/// All args are bitwise-OR'd together to form the final check mask.
+/// See [crate-level docs](crate) for details on `args`.
 ///
 /// Returns a [`crate::Command::Check`] with [`crate::CheckCond::AnyClear`].
 ///
@@ -293,7 +257,9 @@ macro_rules! check_any_clear {
 /// ```ignore
 /// check_all_set!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 /// ```
-/// See [macro overview](self) for details on `args`.
+/// Each `arg` can be `field: value`, `@field` (= all bits of the field), or an arbitrary expression.
+/// All args are bitwise-OR'd together to form the final check mask.
+/// See [crate-level docs](crate) for details on `args`.
 ///
 /// Returns a [`crate::Command::Check`] with [`crate::CheckCond::AllSet`].
 ///
@@ -324,7 +290,9 @@ macro_rules! check_all_set {
 /// ```ignore
 /// check_any_set!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 /// ```
-/// See [macro overview](self) for details on `args`.
+/// Each `arg` can be `field: value`, `@field` (= all bits of the field), or an arbitrary expression.
+/// All args are bitwise-OR'd together to form the final check mask.
+/// See [crate-level docs](crate) for details on `args`.
 ///
 /// Returns a [`crate::Command::Check`] with [`crate::CheckCond::AnySet`].
 ///

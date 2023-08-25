@@ -270,7 +270,7 @@ mod tests {
     #[test]
     #[rustfmt::skip]
     fn serialize_simple() {
-        let mut buf = std::io::Cursor::new(vec![]);
+        let mut buf = vec![];
         let byte_len = serialize(
             &mut buf,
             &[
@@ -300,7 +300,7 @@ mod tests {
         .expect("IO failure");
         assert_eq!(byte_len, 48);
         assert_eq!(
-            &buf.get_ref()[0..48],
+            &buf,
             &[
                 // DCD header
                 0xD2, 0, 48, 0x41,
@@ -319,7 +319,7 @@ mod tests {
     #[test]
     #[rustfmt::skip]
     fn serialize_merge() {
-        let mut buf = std::io::Cursor::new(vec![0u8; 1024]);
+        let mut buf = vec![];
         let byte_len = serialize(
             &mut buf,
             &[
@@ -368,7 +368,7 @@ mod tests {
         ).expect("IO failure");
         assert_eq!(byte_len, 72);
         assert_eq!(
-            &buf.get_ref()[0..72],
+            &buf,
             &[
                 // DCD header
                 0xD2, 0, 72, 0x41,

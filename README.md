@@ -7,6 +7,7 @@ The i.MX RT1050/1060 series of MCUs feature a ROM bootloader. As a part of the b
 
 This crate allows you to generate a DCD binary (byte array) from its semantic description. This is useful e.g. in a `build.rs` script to generate a static variable to be linked to the firmware image. (Shameless plug: See [static-include-bytes](https://crates.io/crates/static-include-bytes).)
 
+
 # What does the DCD do exactly?
 
 Reference: i.MX RT1060 Reference Manual (rev. 3), §9.7.2 .
@@ -25,6 +26,96 @@ The DCD section in the firmware image is a serialized byte array of one or more 
   - `(*address & mask) != 0` --- any set
 
 - **NOP**: Ignored --- may behave as a small delay.
+
+See below for important details and caveats that affect the interpretation of DCD.
+
+
+# Usage
+
+```rust
+use imxrt_dcd as dcd;
+use imxrt_ral as ral;  // feature = "imxrt1062"
+
+// RECOMMENDED: using imxrt-ral and convenience macros
+let commands_macro = vec![
+  dcd::write_reg!(ral::ccm_analog, CCM_ANALOG, PLL_ARM, @BYPASS, BYPASS_CLK_SRC: CLK1),
+  dcd::check_all_clear!(ral::ccm, CCM, CDHIPR, @PERIPH_CLK_SEL_BUSY, @PERIPH2_CLK_SEL_BUSY),
+];
+
+// equivalent direct construction
+let commands_direct = vec![
+  dcd::Command::Write(dcd::Write {
+      width: dcd::Width::B4,
+      op: dcd::WriteOp::Write,
+      address: 0x400D_8000,
+      value: 0x0001_4000,
+  }),
+  dcd::Command::Check(dcd::Check {
+    width: dcd::Width::B4,
+    cond: dcd::CheckCond::AllClear,
+    address: 0x400F_C048,
+    mask: (1 << 3) | (1 << 5),
+    count: None,
+  }),
+];
+
+assert_eq!(commands_macro, commands_direct);
+
+// `serialize` into a `std::io::Write`
+let mut dcd_bytes = vec![];
+let num_bytes_written = dcd::serialize(&mut dcd_bytes, &commands_macro).expect("IO error");
+assert_eq!(num_bytes_written, 28);
+assert_eq!(
+  &dcd_bytes,
+  &[
+    // DCD header
+    0xD2, 0, 28, 0x41,
+    // write
+    0xCC, 0, 12, 0x04, 0x40, 0x0D, 0x80, 0x00, 0x00, 0x01, 0x40, 0x00,
+    // check
+    0xCF, 0, 12, 0x04, 0x40, 0x0F, 0xC0, 0x48, 0x00, 0x00, 0x00, 0x28,
+  ]
+);
+```
+
+
+## Convenience Macros
+
+To simplify the construction of commands, the feature `"ral"` (on by default) provides convenience macros designed to work with register definitions in [`imxrt-ral`][ral].
+
+These macros share a common syntax as follows:
+```ignore
+macro!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
+```
+
+Where:
+
+- `macro` can be:
+  - Write: [`write_reg`] / [`set_reg`] / [`clear_reg`]
+  - Check: [`check_all_clear`] / [`check_any_clear`] / [`check_all_set`] / [`check_any_set`]
+
+- `INSTANCE` should be a pointer-to-register-block, e.g. for `ral::ccm` this should be `CCM`.
+
+- Each `arg` can be:
+  - `field: value` => `(value << field::offset) & field::mask`
+    - Same behavior as [`ral-registers`][ral-reg].
+    - Enumerators / named values of the field can be used directly in the `value` expression.
+  - `@field` => `field::mask`
+    - Reads as "all (bits of) `field`"
+    - Useful for set, clear, and check commands working explicitly with field masks.
+  - An arbitrary expression
+    - May directly refer to fields of the register (e.g. `(0b110 << field1::offset) | field2::mask`).
+
+All args are then bitwise-OR'd together as the final value / mask of the command.
+
+This syntax is inspired by (and is a superset of) `write_reg!` and friends in [`imxrt-ral`][ral] (re-exporting [`ral-registers`][ral-reg]), adapted for the limitations of DCD.
+
+[ral]: https://crates.io/crates/imxrt-ral/
+[ral-reg]: https://crates.io/crates/ral-registers
+
+
+
+# DCD Details and Caveats
 
 ## DCD size limit
 
@@ -68,54 +159,3 @@ The Check command may specify one of the following:
 - max polling count > 0: If the max polling count is hit, the boot ROM will **immediately abandon interpreting the rest of your DCD**.
 
 Note that (through my limited experimentation) the boot ROM does _not_ seem to limit the address range of Check commands.
-
-
-# Toy Example
-
-```rust
-use imxrt_dcd::*;
-
-let mut buf = std::io::Cursor::new(vec![]);
-let byte_len = serialize(
-    &mut buf,
-    &[
-        Command::Nop,
-        Command::Write(Write {
-            width: Width::B4,
-            op: WriteOp::Write,
-            address: 0x01234567,
-            value: 0xdeadbeef,
-        }),
-        Command::Check(Check {
-            width: Width::B2,
-            cond: CheckCond::AnySet,
-            address: 0x89abcdef,
-            mask: 0x55aa55aa,
-            count: Some(16),
-        }),
-        Command::Check(Check {
-            width: Width::B1,
-            cond: CheckCond::AnyClear,
-            address: 0x89abcdef,
-            mask: 0x55aa55aa,
-            count: None,
-        }),
-    ],
-).unwrap();
-assert_eq!(byte_len, 48);
-assert_eq!(
-    &buf.get_ref()[0..48],
-    &[
-        // DCD header
-        0xD2, 0, 48, 0x41,
-        // nop
-        0xC0, 0x00, 0x04, 0x00,
-        // write
-        0xCC, 0, 12, 0x04, 0x01, 0x23, 0x45, 0x67, 0xde, 0xad, 0xbe, 0xef,
-        // check with count
-        0xCF, 0, 16, 0x1a, 0x89, 0xab, 0xcd, 0xef, 0x55, 0xaa, 0x55, 0xaa, 0, 0, 0, 16,
-        // check without
-        0xCF, 0, 12, 0x09, 0x89, 0xab, 0xcd, 0xef, 0x55, 0xaa, 0x55, 0xaa,
-    ]
-);
-```
