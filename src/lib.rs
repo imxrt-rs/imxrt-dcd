@@ -60,6 +60,38 @@ pub enum Width {
     B4 = 0b100u8,
 }
 
+impl Width {
+    /// ```
+    /// # use imxrt_dcd::Width;
+    /// assert_eq!(Width::from_num_bytes(1), Width::B1);
+    /// assert_eq!(Width::from_num_bytes(2), Width::B2);
+    /// assert_eq!(Width::from_num_bytes(4), Width::B4);
+    /// ```
+    pub const fn from_num_bytes(num_bytes: usize) -> Self {
+        match num_bytes {
+            1 => Self::B1,
+            2 => Self::B2,
+            4 => Self::B4,
+            _ => panic!("invalid width"),
+        }
+    }
+
+    /// Returns the width of the given register.
+    /// This is intended to be called on e.g. `&RWRegister<u32>`.
+    /// ```
+    /// # use imxrt_dcd::Width;
+    /// let a = 1u8;
+    /// let b = 2u16;
+    /// let c = 3i32;
+    /// assert_eq!(Width::from_reg(&a), Width::B1);
+    /// assert_eq!(Width::from_reg(&b), Width::B2);
+    /// assert_eq!(Width::from_reg(&c), Width::B4);
+    /// ```
+    pub const fn from_reg<T>(_: &T) -> Self {
+        Self::from_num_bytes(core::mem::size_of::<T>())
+    }
+}
+
 /// Write operation variant.
 #[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(u8)]

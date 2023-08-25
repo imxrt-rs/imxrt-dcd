@@ -110,17 +110,18 @@ macro_rules! write_reg {
     // Internal rule for making a generic Write command.
     // This is shared between all Write macros, hosted here to avoid exporting private macros.
     //
+    // - `width` is inferred from the RAL register type (e.g. `RWRegister<u16>` => `Width::B2`)
     // - `address` is computed from the RAL instance-register pair.
     // - `value` is provided --- the expression can refer to `periph` and `reg` aliases.
 
-    ( @make_command $op:ident, $width:ident, $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $value:expr ) => {{
+    ( @make_command $op:ident, $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $value:expr ) => {{
         #[allow(unused_imports)]
         use $periph as periph;
         #[allow(unused_imports)]
         use $periph::{$reg as reg};
 
         $crate::Command::Write($crate::Write {
-            width: $crate::Width::$width,
+            width: $crate::Width::from_reg(unsafe { &(*(periph::$instance)).$reg $([$offset])* }),
             op: $crate::WriteOp::$op,
             address: unsafe {
                 ::core::ptr::addr_of!((*(periph::$instance)).$reg $([$offset])*) as u32
@@ -133,7 +134,7 @@ macro_rules! write_reg {
 
     ( $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
         $crate::write_reg!(@make_command
-            Write, B4, $periph, $instance, $reg $([$offset])*,
+            Write, $periph, $instance, $reg $([$offset])*,
             $crate::write_reg!(@build_value {W::*, RW::*} $($args)+)
         )
     }};
@@ -163,7 +164,7 @@ macro_rules! write_reg {
 macro_rules! set_reg {
     ( $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
         $crate::write_reg!(@make_command
-            Set, B4, $periph, $instance, $reg $([$offset])*,
+            Set, $periph, $instance, $reg $([$offset])*,
             $crate::write_reg!(@build_value {W::*, RW::*} $($args)+)
         )
     }};
@@ -193,7 +194,7 @@ macro_rules! set_reg {
 macro_rules! clear_reg {
     ( $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
         $crate::write_reg!(@make_command
-            Clear, B4, $periph, $instance, $reg $([$offset])*,
+            Clear, $periph, $instance, $reg $([$offset])*,
             $crate::write_reg!(@build_value {W::*, RW::*} $($args)+)
         )
     }};
@@ -226,16 +227,17 @@ macro_rules! check_all_clear {
     // Internal rule for making a generic Check command.
     // This is shared between all Check macros, hosted here to avoid exporting private macros.
     //
+    // - `width` is inferred from the RAL register type (e.g. `RWRegister<u16>` => `Width::B2`)
     // - `address` is computed from the RAL instance-register pair.
     // - `mask` is provided --- the expression can refer to `periph` and `reg` aliases.
     // - `count` is provided.
 
-    ( @make_command $cond:ident, $width:ident, $count:expr, $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $mask:expr) => {{
+    ( @make_command $cond:ident, $count:expr, $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $mask:expr) => {{
         use $periph as periph;
         #[allow(unused_imports)]
         use periph::$reg as reg;
         $crate::Command::Check($crate::Check {
-            width: $crate::Width::$width,
+            width: $crate::Width::from_reg(unsafe { &(*(periph::$instance)).$reg $([$offset])* }),
             cond: $crate::CheckCond::$cond,
             address: unsafe {
                 ::core::ptr::addr_of!((*(periph::$instance)).$reg $([$offset])*) as u32
@@ -247,7 +249,7 @@ macro_rules! check_all_clear {
 
     ( $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
         $crate::check_all_clear!(@make_command
-            AllClear, B4, None, $periph, $instance, $reg $([$offset])*,
+            AllClear, None, $periph, $instance, $reg $([$offset])*,
             $crate::write_reg!(@build_value {R::*, RW::*} $($args)+)
         )
     }};
@@ -278,7 +280,7 @@ macro_rules! check_all_clear {
 macro_rules! check_any_clear {
     ( $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
         $crate::check_all_clear!(@make_command
-            AnyClear, B4, None, $periph, $instance, $reg $([$offset])*,
+            AnyClear, None, $periph, $instance, $reg $([$offset])*,
             $crate::write_reg!(@build_value {R::*, RW::*} $($args)+)
         )
     }};
@@ -309,7 +311,7 @@ macro_rules! check_any_clear {
 macro_rules! check_all_set {
     ( $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
         $crate::check_all_clear!(@make_command
-            AllSet, B4, None, $periph, $instance, $reg $([$offset])*,
+            AllSet, None, $periph, $instance, $reg $([$offset])*,
             $crate::write_reg!(@build_value {R::*, RW::*} $($args)+)
         )
     }};
@@ -340,7 +342,7 @@ macro_rules! check_all_set {
 macro_rules! check_any_set {
     ( $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
         $crate::check_all_clear!(@make_command
-            AnySet, B4, None, $periph, $instance, $reg $([$offset])*,
+            AnySet, None, $periph, $instance, $reg $([$offset])*,
             $crate::write_reg!(@build_value {R::*, RW::*} $($args)+)
         )
     }};
