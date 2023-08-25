@@ -460,4 +460,23 @@ mod tests {
             }),
         )
     }
+
+    #[test]
+    fn auto_detect_width() {
+        {
+            let c = dcd::write_reg!(ral::usb, USB1, CAPLENGTH, 0);
+            let dcd::Command::Write(w) = c else { panic!() };
+            assert_eq!(w.width, dcd::Width::B1);
+        }
+        {
+            let c = dcd::write_reg!(ral::usb, USB1, HCIVERSION, 0);
+            let dcd::Command::Write(w) = c else { panic!() };
+            assert_eq!(w.width, dcd::Width::B2);
+        }
+        {
+            let c = dcd::write_reg!(ral::usb, USB1, HCSPARAMS, 0);
+            let dcd::Command::Write(w) = c else { panic!() };
+            assert_eq!(w.width, dcd::Width::B4);
+        }
+    }
 }
