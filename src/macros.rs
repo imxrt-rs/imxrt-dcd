@@ -1,8 +1,94 @@
-//! Macros for conveniently creating [DCD commands][cmd] with [`imxrt-ral`][ral] definitions.
-//! See [crate-level documentation](crate).
-//!
-//! [cmd]: crate::Command
-//! [ral]: https://crates.io/crates/imxrt-ral/
+// Macros for constructing commands using RAL register definitions.
+// User-facing docs => crate-level docs.
+
+// Host macro for all implementation detail rules. Semi-public but expected to be not called by
+// users directly. Excluded from SemVer guarantees.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! internal {
+    // Recursively parses value / mask arguments of the public-facing macros.
+    //
+    // This follows the "TT Muncher" pattern:
+    // https://danielkeep.github.io/tlborm/book/pat-incremental-tt-munchers.html
+    //
+    // Macro Args:
+    // - `access`: e.g. `{W::*, RW::*}` (for importing the correct field value enumerators)
+
+    // `field: value`
+    (@build_value
+     $access:tt $field:ident : $value:expr $(, $($rest:tt)*)?) => {{
+        #[allow(unused_imports)]
+        use reg::$field::$access;
+        (($value << reg::$field::offset) & reg::$field::mask)
+        $(
+            | $crate::internal!(@build_value $access $($rest)*)
+        )?
+    }};
+
+    // `@field`
+    (@build_value
+     $access:tt @ $field:ident $(, $($rest:tt)*)?) => {{
+        reg::$field::mask
+        $(
+            | $crate::internal!(@build_value $access $($rest)*)
+        )?
+    }};
+
+    // arbitrary expression
+    (@build_value
+     $access:tt $expr:expr $(, $($rest:tt)*)?) => {{
+        #[allow(unused_imports)]
+        use reg::*;
+        $expr
+        $(
+            | $crate::internal!(@build_value $access $($rest)*)
+        )?
+    }};
+
+    // Constructs a generic Write command from RAL parts. This is shared between all Write macros.
+    //
+    // - `width` is inferred from the RAL register type (e.g. `RWRegister<u16>` => `Width::B2`)
+    // - `address` is computed from the RAL instance-register pair.
+    // - `value` is provided --- the expression can refer to `periph` and `reg` aliases.
+    (@make_write_command
+     $op:ident, $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $value:expr ) => {{
+        #[allow(unused_imports)]
+        use $periph as periph;
+        #[allow(unused_imports)]
+        use $periph::{$reg as reg};
+
+        $crate::Command::Write($crate::Write {
+            width: $crate::Width::from_reg(unsafe { &(*(periph::$instance)).$reg $([$offset])* }),
+            op: $crate::WriteOp::$op,
+            address: unsafe {
+                ::core::ptr::addr_of!((*(periph::$instance)).$reg $([$offset])*) as u32
+            },
+            value: $value,
+        })
+    }};
+
+    // Constructs a generic Check command from RAL parts. This is shared between all Check macros.
+    //
+    // - `width` is inferred from the RAL register type (e.g. `RWRegister<u16>` => `Width::B2`)
+    // - `address` is computed from the RAL instance-register pair.
+    // - `mask` is provided --- the expression can refer to `periph` and `reg` aliases.
+    // - `count` is provided.
+    (@make_check_command
+     $cond:ident, $count:expr, $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $mask:expr) => {{
+        use $periph as periph;
+        #[allow(unused_imports)]
+        use periph::$reg as reg;
+        $crate::Command::Check($crate::Check {
+            width: $crate::Width::from_reg(unsafe { &(*(periph::$instance)).$reg $([$offset])* }),
+            cond: $crate::CheckCond::$cond,
+            address: unsafe {
+                ::core::ptr::addr_of!((*(periph::$instance)).$reg $([$offset])*) as u32
+            },
+            mask: $mask,
+            count: $count,
+        })
+    }};
+}
 
 /// Creates a DCD command that (over-)writes to the specified RAL register,
 /// i.e. `register = arg1 | arg2 | ...` .
@@ -11,7 +97,7 @@
 /// ```ignore
 /// write_reg!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 /// ```
-/// Each `arg` can be `field: value`, `@field` (= all bits of the field), or an arbitrary expression.
+/// Each `arg` can be `FIELD: value`, `@FIELD` (= all bits of the field), or an arbitrary expression.
 /// All args are bitwise-OR'd together to form the final value.
 /// See [crate-level docs](crate) for details on `args`.
 ///
@@ -29,69 +115,10 @@
 /// ```
 #[macro_export]
 macro_rules! write_reg {
-
-    // Internal rule for recursively parsing value / mask arguments.
-    // This is shared between all macros, hosted here to avoid exporting private macros.
-    //
-    // - `access`: e.g. `{W::*, RW::*}` (for importing the correct field value enumerators)
-
-    // `field: value`
-    ( @build_value $access:tt $field:ident : $value:expr $(, $($rest:tt)*)?) => {{
-        #[allow(unused_imports)]
-        use reg::$field::$access;
-        (($value << reg::$field::offset ) & reg::$field::mask)
-        $(
-            | $crate::write_reg!(@build_value $access $($rest)*)
-        )?
-    }};
-
-    // `@field`
-    ( @build_value $access:tt @ $field:ident $(, $($rest:tt)*)?) => {{
-        reg::$field::mask
-        $(
-            | $crate::write_reg!(@build_value $access $($rest)*)
-        )?
-    }};
-
-    // arbitrary expression
-    ( @build_value $access:tt $expr:expr $(, $($rest:tt)*)?) => {{
-        #[allow(unused_imports)]
-        use reg::*;
-        $expr
-        $(
-            | $crate::write_reg!(@build_value $access $($rest)*)
-        )?
-    }};
-
-    // Internal rule for making a generic Write command.
-    // This is shared between all Write macros, hosted here to avoid exporting private macros.
-    //
-    // - `width` is inferred from the RAL register type (e.g. `RWRegister<u16>` => `Width::B2`)
-    // - `address` is computed from the RAL instance-register pair.
-    // - `value` is provided --- the expression can refer to `periph` and `reg` aliases.
-
-    ( @make_command $op:ident, $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $value:expr ) => {{
-        #[allow(unused_imports)]
-        use $periph as periph;
-        #[allow(unused_imports)]
-        use $periph::{$reg as reg};
-
-        $crate::Command::Write($crate::Write {
-            width: $crate::Width::from_reg(unsafe { &(*(periph::$instance)).$reg $([$offset])* }),
-            op: $crate::WriteOp::$op,
-            address: unsafe {
-                ::core::ptr::addr_of!((*(periph::$instance)).$reg $([$offset])*) as u32
-            },
-            value: $value,
-        })
-    }};
-
-    // Main macro API. Wraps around @make_command and @build_value.
-
-    ( $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
-        $crate::write_reg!(@make_command
+    ($periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
+        $crate::internal!(@make_write_command
             Write, $periph, $instance, $reg $([$offset])*,
-            $crate::write_reg!(@build_value {W::*, RW::*} $($args)+)
+            $crate::internal!(@build_value {W::*, RW::*} $($args)+)
         )
     }};
 }
@@ -103,7 +130,7 @@ macro_rules! write_reg {
 /// ```ignore
 /// write_reg!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 /// ```
-/// Each `arg` can be `field: value`, `@field` (= all bits of the field), or an arbitrary expression.
+/// Each `arg` can be `FIELD: value`, `@FIELD` (= all bits of the field), or an arbitrary expression.
 /// All args are bitwise-OR'd together to form the final value.
 /// See [crate-level docs](crate) for details on `args`.
 ///
@@ -120,10 +147,10 @@ macro_rules! write_reg {
 /// ```
 #[macro_export]
 macro_rules! set_reg {
-    ( $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
-        $crate::write_reg!(@make_command
+    ($periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
+        $crate::internal!(@make_write_command
             Set, $periph, $instance, $reg $([$offset])*,
-            $crate::write_reg!(@build_value {W::*, RW::*} $($args)+)
+            $crate::internal!(@build_value {W::*, RW::*} $($args)+)
         )
     }};
 }
@@ -135,7 +162,7 @@ macro_rules! set_reg {
 /// ```ignore
 /// write_reg!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 /// ```
-/// Each `arg` can be `field: value`, `@field` (= all bits of the field), or an arbitrary expression.
+/// Each `arg` can be `FIELD: value`, `@FIELD` (= all bits of the field), or an arbitrary expression.
 /// All args are bitwise-OR'd together to form the final value.
 /// See [crate-level docs](crate) for details on `args`.
 ///
@@ -152,10 +179,10 @@ macro_rules! set_reg {
 /// ```
 #[macro_export]
 macro_rules! clear_reg {
-    ( $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
-        $crate::write_reg!(@make_command
+    ($periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
+        $crate::internal!(@make_write_command
             Clear, $periph, $instance, $reg $([$offset])*,
-            $crate::write_reg!(@build_value {W::*, RW::*} $($args)+)
+            $crate::internal!(@build_value {W::*, RW::*} $($args)+)
         )
     }};
 }
@@ -167,7 +194,7 @@ macro_rules! clear_reg {
 /// ```ignore
 /// check_all_clear!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 /// ```
-/// Each `arg` can be `field: value`, `@field` (= all bits of the field), or an arbitrary expression.
+/// Each `arg` can be `FIELD: value`, `@FIELD` (= all bits of the field), or an arbitrary expression.
 /// All args are bitwise-OR'd together to form the final check mask.
 /// See [crate-level docs](crate) for details on `args`.
 ///
@@ -185,34 +212,10 @@ macro_rules! clear_reg {
 ///
 #[macro_export]
 macro_rules! check_all_clear {
-
-    // Internal rule for making a generic Check command.
-    // This is shared between all Check macros, hosted here to avoid exporting private macros.
-    //
-    // - `width` is inferred from the RAL register type (e.g. `RWRegister<u16>` => `Width::B2`)
-    // - `address` is computed from the RAL instance-register pair.
-    // - `mask` is provided --- the expression can refer to `periph` and `reg` aliases.
-    // - `count` is provided.
-
-    ( @make_command $cond:ident, $count:expr, $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $mask:expr) => {{
-        use $periph as periph;
-        #[allow(unused_imports)]
-        use periph::$reg as reg;
-        $crate::Command::Check($crate::Check {
-            width: $crate::Width::from_reg(unsafe { &(*(periph::$instance)).$reg $([$offset])* }),
-            cond: $crate::CheckCond::$cond,
-            address: unsafe {
-                ::core::ptr::addr_of!((*(periph::$instance)).$reg $([$offset])*) as u32
-            },
-            mask: $mask,
-            count: $count,
-        })
-    }};
-
-    ( $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
-        $crate::check_all_clear!(@make_command
+    ($periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
+        $crate::internal!(@make_check_command
             AllClear, None, $periph, $instance, $reg $([$offset])*,
-            $crate::write_reg!(@build_value {R::*, RW::*} $($args)+)
+            $crate::internal!(@build_value {R::*, RW::*} $($args)+)
         )
     }};
 }
@@ -224,7 +227,7 @@ macro_rules! check_all_clear {
 /// ```ignore
 /// check_any_clear!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 /// ```
-/// Each `arg` can be `field: value`, `@field` (= all bits of the field), or an arbitrary expression.
+/// Each `arg` can be `FIELD: value`, `@FIELD` (= all bits of the field), or an arbitrary expression.
 /// All args are bitwise-OR'd together to form the final check mask.
 /// See [crate-level docs](crate) for details on `args`.
 ///
@@ -242,10 +245,10 @@ macro_rules! check_all_clear {
 ///
 #[macro_export]
 macro_rules! check_any_clear {
-    ( $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
-        $crate::check_all_clear!(@make_command
+    ($periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
+        $crate::internal!(@make_check_command
             AnyClear, None, $periph, $instance, $reg $([$offset])*,
-            $crate::write_reg!(@build_value {R::*, RW::*} $($args)+)
+            $crate::internal!(@build_value {R::*, RW::*} $($args)+)
         )
     }};
 }
@@ -257,7 +260,7 @@ macro_rules! check_any_clear {
 /// ```ignore
 /// check_all_set!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 /// ```
-/// Each `arg` can be `field: value`, `@field` (= all bits of the field), or an arbitrary expression.
+/// Each `arg` can be `FIELD: value`, `@FIELD` (= all bits of the field), or an arbitrary expression.
 /// All args are bitwise-OR'd together to form the final check mask.
 /// See [crate-level docs](crate) for details on `args`.
 ///
@@ -275,10 +278,10 @@ macro_rules! check_any_clear {
 ///
 #[macro_export]
 macro_rules! check_all_set {
-    ( $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
-        $crate::check_all_clear!(@make_command
+    ($periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
+        $crate::internal!(@make_check_command
             AllSet, None, $periph, $instance, $reg $([$offset])*,
-            $crate::write_reg!(@build_value {R::*, RW::*} $($args)+)
+            $crate::internal!(@build_value {R::*, RW::*} $($args)+)
         )
     }};
 }
@@ -290,7 +293,7 @@ macro_rules! check_all_set {
 /// ```ignore
 /// check_any_set!(ral::path::to::peripheral, INSTANCE, REGISTER, ...args)
 /// ```
-/// Each `arg` can be `field: value`, `@field` (= all bits of the field), or an arbitrary expression.
+/// Each `arg` can be `FIELD: value`, `@FIELD` (= all bits of the field), or an arbitrary expression.
 /// All args are bitwise-OR'd together to form the final check mask.
 /// See [crate-level docs](crate) for details on `args`.
 ///
@@ -308,10 +311,10 @@ macro_rules! check_all_set {
 ///
 #[macro_export]
 macro_rules! check_any_set {
-    ( $periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
-        $crate::check_all_clear!(@make_command
+    ($periph:path, $instance:ident, $reg:ident $([$offset:expr])*, $($args:tt)+) => {{
+        $crate::internal!(@make_check_command
             AnySet, None, $periph, $instance, $reg $([$offset])*,
-            $crate::write_reg!(@build_value {R::*, RW::*} $($args)+)
+            $crate::internal!(@build_value {R::*, RW::*} $($args)+)
         )
     }};
 }
@@ -319,7 +322,7 @@ macro_rules! check_any_set {
 #[cfg(test)]
 mod tests {
     use crate as dcd;
-    use imxrt_ral as ral;  // feature = "imxrt1062"
+    use imxrt_ral as ral; // feature = "imxrt1062"
 
     #[test]
     fn field_mask_shorthand() {
@@ -327,7 +330,11 @@ mod tests {
             dcd::write_reg!(
                 ral::ccm_analog, CCM_ANALOG, PLL_ARM, @BYPASS, BYPASS_CLK_SRC: CLK1),
             dcd::write_reg!(
-                ral::ccm_analog, CCM_ANALOG, PLL_ARM, BYPASS::mask | (0b01 << 14)),
+                ral::ccm_analog,
+                CCM_ANALOG,
+                PLL_ARM,
+                BYPASS::mask | (0b01 << 14)
+            ),
         );
     }
 

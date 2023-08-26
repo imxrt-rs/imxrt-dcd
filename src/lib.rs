@@ -2,7 +2,7 @@
 use itertools::Itertools;
 
 #[cfg(feature = "ral")]
-pub mod macros;
+mod macros;
 
 /// A DCD command.
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
@@ -15,6 +15,18 @@ pub enum Command {
     /// DCD command for polling an address until the value matches a given bitmask condition; [`Check`].
     Check(Check),
 }
+
+/*
+// TODO(summivox): not ready
+impl Command {
+    pub fn with_count(self, count: u32) -> Self {
+        match self {
+            Self::Check(check) => Self::Check(check.with_count(count)),
+            _ => panic!("`with_count` can only be called on a `Check` command."),
+        }
+    }
+}
+ */
 
 /// DCD command for writing a value to an address.
 #[derive(Default, Clone, Debug, Eq, PartialEq)]
@@ -47,6 +59,15 @@ pub struct Check {
     pub count: Option<u32>,
 }
 
+/*
+// TODO(summivox): not ready
+impl Check {
+    pub fn with_count(self, count: u32) -> Self {
+        Self { count: Some(count), ..self }
+    }
+}
+ */
+
 /// Byte width of the bus read/write.
 #[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(u8)]
@@ -76,8 +97,9 @@ impl Width {
         }
     }
 
-    /// Returns the width of the given register.
-    /// This is intended to be called on e.g. `&RWRegister<u32>`.
+    /// Returns the width of the given RAL register instance, i.e. `&RWRegister<u32>` and friends.
+    ///
+    /// Since `RWRegister<T>` is a newtype wrapper of `T`, this works on primitives too.
     /// ```
     /// # use imxrt_dcd::Width;
     /// let a = 1u8;
@@ -92,7 +114,7 @@ impl Width {
     }
 }
 
-/// Write operation variant.
+/// [`Write`] operation variants.
 #[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(u8)]
 pub enum WriteOp {
@@ -105,7 +127,7 @@ pub enum WriteOp {
     Set = 0b11_000u8,
 }
 
-/// Check condition variant.
+/// [`Check`] condition variants.
 #[derive(Default, Debug, Copy, Clone, Eq, PartialEq)]
 #[repr(u8)]
 pub enum CheckCond {
