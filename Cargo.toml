@@ -32,5 +32,5 @@ version = "1.1.0"
 authors = ["summivox <summivox@gmail.com>"]
 
 [workspace.dependencies]
-imxrt-dcd = { path = ".", version = "1.0.1" }
-imxrt-ral = { git = "https://github.com/mciantyre/imxrt-ral", version = "0.5.3", branch = "v0.5", features = ["imxrt1062"] }
+imxrt-dcd = { path = ".", version = "1.1.0" }
+imxrt-ral = { version = "0.5.3", features = ["imxrt1062"] }

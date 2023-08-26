@@ -65,7 +65,8 @@ dependencies = [
 [[package]]
 name = "imxrt-ral"
 version = "0.5.3"
-source = "git+https://github.com/mciantyre/imxrt-ral?branch=v0.5#bb0088d5b35b5575d5e228291f9fd03586c5322e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fb8b67f5867258a62fcbfa51ae0985d7fa2d5ffdb5b9c4f559b0af110300369"
 dependencies = [
  "cortex-m",
  "ral-registers",
