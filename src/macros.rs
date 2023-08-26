@@ -45,6 +45,10 @@ macro_rules! internal {
         )?
     }};
 
+    // termination for trailing comma
+    (@build_value
+     $access:tt) => {0};
+
     // Constructs a generic Write command from RAL parts. This is shared between all Write macros.
     //
     // - `width` is inferred from the RAL register type (e.g. `RWRegister<u16>` => `Width::B2`)
@@ -329,6 +333,20 @@ mod tests {
         assert_eq!(
             dcd::write_reg!(
                 ral::ccm_analog, CCM_ANALOG, PLL_ARM, @BYPASS, BYPASS_CLK_SRC: CLK1),
+            dcd::write_reg!(
+                ral::ccm_analog,
+                CCM_ANALOG,
+                PLL_ARM,
+                BYPASS::mask | (0b01 << 14)
+            ),
+        );
+    }
+
+    #[test]
+    fn trailing_comma() {
+        assert_eq!(
+            dcd::write_reg!(
+                ral::ccm_analog, CCM_ANALOG, PLL_ARM, @BYPASS, BYPASS_CLK_SRC: CLK1, ),
             dcd::write_reg!(
                 ral::ccm_analog,
                 CCM_ANALOG,
