@@ -16,34 +16,38 @@ macro_rules! internal {
 
     // `field: value`
     (@build_value
-     $access:tt $field:ident : $value:expr $(, $($rest:tt)*)?) => {{
-        #[allow(unused_imports)]
-        use reg::$field::$access;
-        (($value << reg::$field::offset) & reg::$field::mask)
+     $access:tt $field:ident : $value:expr $(, $($rest:tt)*)?) => {
+        {
+            #[allow(unused_imports)]
+            use reg::$field::$access;
+            (($value << reg::$field::offset) & reg::$field::mask)
+        }
         $(
             | $crate::internal!(@build_value $access $($rest)*)
         )?
-    }};
+    };
 
     // `@field`
     (@build_value
-     $access:tt @ $field:ident $(, $($rest:tt)*)?) => {{
+     $access:tt @ $field:ident $(, $($rest:tt)*)?) => {
         reg::$field::mask
         $(
             | $crate::internal!(@build_value $access $($rest)*)
         )?
-    }};
+    };
 
     // arbitrary expression
     (@build_value
-     $access:tt $expr:expr $(, $($rest:tt)*)?) => {{
-        #[allow(unused_imports)]
-        use reg::*;
-        $expr
+     $access:tt $expr:expr $(, $($rest:tt)*)?) => {
+        {
+            #[allow(unused_imports)]
+            use reg::*;
+            $expr
+        }
         $(
             | $crate::internal!(@build_value $access $($rest)*)
         )?
-    }};
+    };
 
     // termination for trailing comma
     (@build_value
